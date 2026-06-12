@@ -231,8 +231,21 @@
   <script>
     const STORAGE_KEY = 'starlink-usage-manager-local-v1';
 
-    // ✅ 여기에 Firebase Realtime Database 설정값을 붙여넣으세요.
-    // Firebase Console → Project settings → General → Your apps → SDK setup and configuration
+    const state = {
+      data: [
+        { id: 1, pos: 'CAPT', adj: 0, r1: 0, r2: 0, r3: 0, quota: 80 },
+        { id: 2, pos: 'C/O', adj: 0, r1: 0, r2: 0, r3: 0, quota: 100 },
+        { id: 3, pos: '1/O', adj: 0, r1: 0, r2: 0, r3: 0, quota: 100 },
+        { id: 4, pos: 'C/E', adj: 0, r1: 0, r2: 0, r3: 0, quota: 80 }
+      ],
+      satTotal: 0,
+      isEditable: false,
+      progress: 0,
+      dirty: false
+    };
+
+
+    // ✅ Firebase Console에서 받은 설정값으로 아래 내용을 교체하세요.
     const firebaseConfig = {
       apiKey: "PASTE_YOUR_API_KEY",
       authDomain: "PASTE_YOUR_PROJECT_ID.firebaseapp.com",
@@ -255,17 +268,22 @@
 
     function initFirebase() {
       if (!isFirebaseConfigured()) {
-        console.warn('Firebase 설정값이 아직 입력되지 않았습니다. localStorage 방식으로만 작동합니다.');
+        console.warn('Firebase 설정값이 아직 입력되지 않았습니다. 현재는 로컬 저장만 작동합니다.');
         return false;
       }
       if (!window.firebase) {
         console.warn('Firebase SDK를 불러오지 못했습니다. 인터넷 연결을 확인하세요.');
         return false;
       }
-      if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-      db = firebase.database();
-      cloudRef = db.ref(CLOUD_PATH);
-      return true;
+      try {
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        db = firebase.database();
+        cloudRef = db.ref(CLOUD_PATH);
+        return true;
+      } catch (error) {
+        console.error(error);
+        return false;
+      }
     }
 
     function makeSavePayload() {
@@ -290,20 +308,19 @@
         isLoadingCloud = true;
         const snapshot = await cloudRef.get();
         const saved = snapshot.val();
-        const applied = applySavedData(saved);
-        if (applied) {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+        if (applySavedData(saved)) {
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)); } catch {}
           render();
           showToast('☁️ 클라우드 데이터 불러옴');
+          return true;
         }
-        return applied;
       } catch (error) {
         console.error(error);
         showToast('⚠️ 클라우드 불러오기 실패');
-        return false;
       } finally {
         isLoadingCloud = false;
       }
+      return false;
     }
 
     async function saveCloud() {
@@ -311,9 +328,7 @@
         showToast('🔒 조회 모드에서는 저장할 수 없습니다');
         return;
       }
-
       const payload = makeSavePayload();
-
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
         if (cloudRef) {
@@ -339,21 +354,10 @@
         applySavedData(saved);
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)); } catch {}
         render();
+      }, (error) => {
+        console.error(error);
       });
     }
-
-    const state = {
-      data: [
-        { id: 1, pos: 'CAPT', adj: 0, r1: 0, r2: 0, r3: 0, quota: 80 },
-        { id: 2, pos: 'C/O', adj: 0, r1: 0, r2: 0, r3: 0, quota: 100 },
-        { id: 3, pos: '1/O', adj: 0, r1: 0, r2: 0, r3: 0, quota: 100 },
-        { id: 4, pos: 'C/E', adj: 0, r1: 0, r2: 0, r3: 0, quota: 80 }
-      ],
-      satTotal: 0,
-      isEditable: false,
-      progress: 0,
-      dirty: false
-    };
 
     const $ = (id) => document.getElementById(id);
 
@@ -401,7 +405,7 @@
     }
 
     function updateSaveStatus() {
-      $('saveStatus').textContent = state.dirty ? '저장 안 됨' : (cloudRef ? '클라우드 저장 완료' : '로컬 저장 완료');
+      $('saveStatus').textContent = state.dirty ? '저장 안 됨' : '저장 완료';
       $('saveStatus').className = state.dirty
         ? 'mt-2 rounded-full bg-orange-50 px-3 py-1 text-[10px] font-bold text-orange-500'
         : 'mt-2 rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-bold text-emerald-600';
@@ -771,13 +775,6 @@
       event.preventDefault();
       event.returnValue = '';
     });
-
-    try {
-        const blob = new Blob([swCode], { type: 'text/javascript' });
-        const swUrl = URL.createObjectURL(blob);
-        navigator.serviceWorker.register(swUrl).catch(() => {});
-      } catch {}
-    }
 
     try {
       loadLocal();
