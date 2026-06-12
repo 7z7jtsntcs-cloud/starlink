@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#2563eb" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Starlink Usage" />
+  <title>Starlink Usage Manager</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;800;900&display=swap');
+
+    body {
+      font-family: 'Pretendard', sans-serif;
+      letter-spacing: -0.025em;
+      -webkit-font-smoothing: antialiased;
+      overscroll-behavior-y: none;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    button, input, label {
+      touch-action: manipulation;
+    }
+
+    input {
+      font-size: 16px;
+    }
+
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+
+    .tool-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.25rem;
+      padding: 0.55rem 0.8rem;
+      border-radius: 0.75rem;
+      font-size: 0.75rem;
+      font-weight: 800;
+      border: 1px solid rgb(226 232 240);
+      background: white;
+      color: rgb(71 85 105);
+      transition: 0.15s ease;
+      white-space: nowrap;
+    }
+
+    .tool-btn:hover { background: rgb(248 250 252); }
+    .tool-btn:active { transform: scale(0.97); }
+
+    .status-card {
+      min-height: 140px;
+      background: white;
+      padding: 1.5rem;
+      border-radius: 1.5rem;
+      border: 1px solid rgb(226 232 240);
+      box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+
+    .move-btn {
+      padding: 0.25rem 0.45rem;
+      border-radius: 0.45rem;
+      color: rgb(148 163 184);
+      transition: 0.15s ease;
+    }
+
+    .move-btn:hover {
+      background: rgb(241 245 249);
+      color: rgb(37 99 235);
+    }
+
+    .read-only-input {
+      pointer-events: none;
+      border-bottom: none !important;
+    }
+
+    .capture-text { display: none; }
+
+    .capture-mode .no-print { display: none !important; }
+    .capture-mode input { display: none !important; }
+    .capture-mode .capture-text {
+      display: inline-block !important;
+      line-height: 1 !important;
+      vertical-align: top;
+    }
+
+    @media (max-width: 768px) {
+      .desktop-table { display: none; }
+      .mobile-list { display: grid; }
+      .mobile-safe-bottom { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+      .mobile-sticky-actions { display: grid; }
+      .status-card { min-height: 118px; padding: 1.1rem; border-radius: 1.25rem; }
+    }
+
+    @media (min-width: 769px) {
+      .desktop-table { display: block; }
+      .mobile-list { display: none; }
+      .mobile-sticky-actions { display: none; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800">
+  <noscript>
+    <div style="padding:20px; background:#fee2e2; color:#991b1b; font-weight:800; text-align:center;">
+      이 페이지는 JavaScript가 켜져 있어야 작동합니다.
+    </div>
+  </noscript>
+  <div id="loginSection" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/95 px-4 text-center backdrop-blur-sm">
+    <div class="w-full max-w-md rounded-[2rem] bg-white p-9 shadow-2xl">
+      <div class="mx-auto mb-6 inline-flex rounded-full bg-blue-50 p-4 text-blue-600">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        </svg>
+      </div>
+      <h1 class="mb-2 text-3xl font-black uppercase tracking-tighter text-slate-950">Starlink</h1>
+      <p class="mb-7 text-sm font-semibold leading-relaxed text-slate-500">
+        시스템 비밀번호를 입력하세요.<br />
+        <span class="font-black text-blue-600">조회: 1357</span> · <span class="font-black text-green-600">편집: 1919</span><br />
+        <span class="mt-2 inline-block text-[11px] text-slate-400">잠긴 것처럼 보이면 편집 모드 1919로 접속하세요.</span>
+      </p>
+      <input id="passwordInput" type="password" inputmode="numeric" autocomplete="off" placeholder="Passphrase" class="mb-4 w-full rounded-2xl border border-slate-200 px-6 py-4 text-center text-xl font-black tracking-widest outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+      <button id="loginBtn" class="w-full rounded-2xl bg-blue-600 py-4 text-lg font-black text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700 active:scale-95">접속하기</button>
+      <p id="loginError" class="mt-4 hidden text-sm font-black text-red-500">비밀번호가 올바르지 않습니다.</p>
+    </div>
+  </div>
+
+  <main id="mainContent" class="mobile-safe-bottom mx-auto hidden max-w-[1500px] p-3 opacity-0 transition-opacity duration-500 md:p-8">
+    <div class="no-print mb-4 flex justify-end gap-2 overflow-x-auto pb-1">
+      <button id="captureBtn" class="tool-btn border-blue-100 text-blue-600 hover:bg-blue-50">📸 이미지 저장</button>
+      <button id="backupBtn" class="tool-btn">📥 백업 다운로드</button>
+      <label id="importLabel" class="tool-btn cursor-pointer">
+        📤 불러오기
+        <input id="importFile" type="file" accept=".json" class="hidden" />
+      </label>
+    </div>
+
+    <section id="captureArea" class="rounded-[2rem] bg-slate-50 p-4">
+      <header class="mb-8 flex flex-col items-start justify-between gap-4 border-b border-slate-200 pb-8 md:flex-row md:items-center">
+        <div>
+          <h2 class="text-4xl font-black italic leading-none tracking-tighter text-slate-950 uppercase">
+            Starlink<span class="ml-2 text-2xl font-normal not-italic text-blue-600">Usage Report</span>
+          </h2>
+          <p id="cycleDisplay" class="mt-2 text-xs font-semibold text-slate-500"></p>
+        </div>
+        <div class="no-print flex w-full flex-wrap gap-2 md:w-auto">
+          <button id="addBtn" class="flex-1 rounded-xl bg-slate-800 px-5 py-2.5 text-sm font-black text-white shadow-sm hover:bg-slate-700 md:flex-none">+ 행 추가</button>
+          <button id="saveBtn" class="flex-1 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-blue-200 hover:bg-blue-700 md:flex-none">💾 저장</button>
+          <button id="logoutBtn" class="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-black text-slate-500 hover:bg-slate-50">로그아웃</button>
+        </div>
+      </header>
+
+      <section class="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="status-card border-2 border-blue-500 bg-blue-50/40 shadow-lg shadow-blue-100">
+          <p class="mb-3 text-[11px] font-black uppercase tracking-widest text-blue-600">위성 Total 입력</p>
+          <div class="flex w-full items-center justify-center gap-2 px-2">
+            <input id="satTotalInput" type="number" min="0" step="0.1" placeholder="0" class="w-32 rounded-2xl border-2 border-blue-200 bg-white py-2 text-center text-3xl font-black text-blue-600 shadow-inner outline-none focus:border-blue-500" />
+            <span id="satTotalCapture" class="capture-text text-3xl font-black text-blue-600">0</span>
+            <span class="text-lg font-black text-blue-400">GB</span>
+          </div>
+        </div>
+
+        <div class="status-card">
+          <p class="mb-3 text-[11px] font-black uppercase tracking-widest text-slate-400">실제 사용기 합계</p>
+          <p id="totalNetRouter" class="text-4xl font-black leading-none text-slate-950">0.00 <span class="text-lg font-normal text-slate-400">GB</span></p>
+          <p id="routerSatRatio" class="mt-3 rounded-full bg-blue-50 px-3 py-1.5 text-[11px] font-black tracking-tighter text-blue-600">기준 비율: 0.00%</p>
+        </div>
+
+        <div class="status-card">
+          <p class="mb-3 text-[11px] font-black uppercase tracking-widest text-slate-400">한달 진행률 10~9일</p>
+          <p id="monthProgressText" class="text-4xl font-black leading-none text-slate-950">0%</p>
+          <div class="mt-4 h-2.5 w-48 overflow-hidden rounded-full bg-slate-100">
+            <div id="monthProgressBar" class="h-full bg-blue-600 transition-all duration-1000" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <div class="status-card">
+          <p class="mb-3 text-[11px] font-black uppercase tracking-widest text-slate-400">접속 모드</p>
+          <p id="modeStatus" class="text-xl font-black uppercase text-blue-600">조회 모드</p>
+          <p id="saveStatus" class="mt-2 rounded-full bg-slate-50 px-3 py-1 text-[10px] font-bold text-slate-400">로컬 저장</p>
+        </div>
+      </section>
+
+      <section class="desktop-table overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-sm">
+        <div class="overflow-x-auto">
+          <table id="mainTable" class="w-full min-w-[1100px] border-collapse text-left">
+            <thead class="bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-400">
+              <tr>
+                <th class="border-b px-6 py-5">직책</th>
+                <th class="border-b px-2 py-5 text-center text-blue-500">사용률</th>
+                <th class="edit-col border-b px-2 py-5 text-center text-red-400">보정량</th>
+                <th class="edit-col border-b px-2 py-5 text-center">원본 1</th>
+                <th class="edit-col border-b px-2 py-5 text-center">원본 2</th>
+                <th class="edit-col border-b px-2 py-5 text-center">원본 3</th>
+                <th class="border-b px-6 py-5 text-center">순수사용량</th>
+                <th class="border-b bg-blue-50/50 px-6 py-5 text-center font-black text-blue-600">위성 계산</th>
+                <th class="border-b px-6 py-5 text-center">할당량</th>
+                <th class="border-b px-6 py-5 text-center">잔량</th>
+                <th class="edit-col no-print border-b px-6 py-5 text-center">관리</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody" class="divide-y divide-slate-100 text-sm font-semibold text-slate-800"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="mobileList" class="mobile-list gap-3"></section>
+    </section>
+
+    <nav id="mobileStickyActions" class="mobile-sticky-actions fixed bottom-0 left-0 right-0 z-40 grid-cols-3 gap-2 border-t border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur-md" style="padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));">
+      <button id="mobileCaptureBtn" class="rounded-2xl border border-blue-100 bg-blue-50 px-3 py-3 text-xs font-black text-blue-600">📸 저장</button>
+      <button id="mobileSaveBtn" class="rounded-2xl bg-blue-600 px-3 py-3 text-xs font-black text-white">💾 저장</button>
+      <button id="mobileAddBtn" class="rounded-2xl bg-slate-900 px-3 py-3 text-xs font-black text-white">+ 추가</button>
+    </nav>
+  </main>
+
+  <div id="toast" class="pointer-events-none fixed bottom-10 left-1/2 z-[60] -translate-x-1/2 translate-y-10 rounded-2xl bg-slate-800 px-8 py-4 text-sm font-black text-white opacity-0 shadow-2xl transition-all"></div>
+
+  <script>
+    const STORAGE_KEY = 'starlink-usage-manager-local-v1';
+
+    const state = {
+      data: [
+        { id: 1, pos: 'CAPT', adj: 0, r1: 0, r2: 0, r3: 0, quota: 80 },
+        { id: 2, pos: 'C/O', adj: 0, r1: 0, r2: 0, r3: 0, quota: 100 },
+        { id: 3, pos: '1/O', adj: 0, r1: 0, r2: 0, r3: 0, quota: 100 },
+        { id: 4, pos: 'C/E', adj: 0, r1: 0, r2: 0, r3: 0, quota: 80 }
+      ],
+      satTotal: 0,
+      isEditable: false,
+      progress: 0,
+      dirty: false
+    };
+
+
+    // ✅ Firebase Console에서 받은 설정값으로 아래 내용을 교체하세요.
+    const firebaseConfig = {
+      apiKey: "PASTE_YOUR_API_KEY",
+      authDomain: "PASTE_YOUR_PROJECT_ID.firebaseapp.com",
+      databaseURL: "https://PASTE_YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
+      projectId: "PASTE_YOUR_PROJECT_ID",
+      storageBucket: "PASTE_YOUR_PROJECT_ID.appspot.com",
+      messagingSenderId: "PASTE_YOUR_MESSAGING_SENDER_ID",
+      appId: "PASTE_YOUR_APP_ID"
+    };
+
+    const CLOUD_PATH = 'starlinkUsage/current';
+    let db = null;
+    let cloudRef = null;
+    let isLoadingCloud = false;
+
+    function isFirebaseConfigured() {
+      return firebaseConfig.apiKey && !firebaseConfig.apiKey.includes('PASTE_') &&
+             firebaseConfig.databaseURL && !firebaseConfig.databaseURL.includes('PASTE_');
+    }
+
+    function initFirebase() {
+      if (!isFirebaseConfigured()) {
+        console.warn('Firebase 설정값이 아직 입력되지 않았습니다. 현재는 로컬 저장만 작동합니다.');
+        return false;
+      }
+      if (!window.firebase) {
+        console.warn('Firebase SDK를 불러오지 못했습니다. 인터넷 연결을 확인하세요.');
+        return false;
+      }
+      try {
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        db = firebase.database();
+        cloudRef = db.ref(CLOUD_PATH);
+        return true;
+      } catch (error) {
+        console.error(error);
+        return false;
+      }
+    }
+
+    function makeSavePayload() {
+      return {
+        data: state.data,
+        satTotal: state.satTotal,
+        lastUpdated: new Date().toISOString()
+      };
+    }
+
+    function applySavedData(saved) {
+      if (!saved) return false;
+      if (Array.isArray(saved.data)) state.data = saved.data;
+      state.satTotal = toNumber(saved.satTotal);
+      state.dirty = false;
+      return true;
+    }
+
+    async function loadCloud() {
+      if (!cloudRef) return false;
+      try {
+        isLoadingCloud = true;
+        const snapshot = await cloudRef.get();
+        const saved = snapshot.val();
+        if (applySavedData(saved)) {
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)); } catch {}
+          render();
+          showToast('☁️ 클라우드 데이터 불러옴');
+          return true;
+        }
+      } catch (error) {
+        console.error(error);
+        showToast('⚠️ 클라우드 불러오기 실패');
+      } finally {
+        isLoadingCloud = false;
+      }
+      return false;
+    }
+
+    async function saveCloud() {
+      if (!state.isEditable) {
+        showToast('🔒 조회 모드에서는 저장할 수 없습니다');
+        return;
+      }
+      const payload = makeSavePayload();
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        if (cloudRef) {
+          await cloudRef.set(payload);
+          showToast('☁️ 클라우드 저장 완료');
+        } else {
+          showToast('✅ 로컬 저장 완료 - Firebase 설정 필요');
+        }
+        state.dirty = false;
+        updateSaveStatus();
+      } catch (error) {
+        console.error(error);
+        showToast('❌ 저장 실패');
+      }
+    }
+
+    function subscribeCloud() {
+      if (!cloudRef) return;
+      cloudRef.on('value', (snapshot) => {
+        if (isLoadingCloud) return;
+        const saved = snapshot.val();
+        if (!saved) return;
+        applySavedData(saved);
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)); } catch {}
+        render();
+      }, (error) => {
+        console.error(error);
+      });
+    }
+
+    const $ = (id) => document.getElementById(id);
+
+    function showToast(message) {
+      const toast = $('toast');
+      toast.textContent = message;
+      toast.classList.remove('opacity-0', 'translate-y-10');
+      toast.classList.add('opacity-100', 'translate-y-0');
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-10');
+        toast.classList.remove('opacity-100', 'translate-y-0');
+      }, 2500);
+    }
+
+    function toNumber(value) {
+      const num = Number.parseFloat(value);
+      return Number.isFinite(num) && num >= 0 ? num : 0;
+    }
+
+    function loadLocal() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+        const saved = JSON.parse(raw);
+        if (Array.isArray(saved.data)) state.data = saved.data;
+        state.satTotal = toNumber(saved.satTotal);
+      } catch {
+        showToast('⚠️ 저장 데이터 읽기 실패');
+      }
+    }
+
+    function saveLocal() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          data: state.data,
+          satTotal: state.satTotal,
+          lastUpdated: new Date().toISOString()
+        }));
+        state.dirty = false;
+        updateSaveStatus();
+        showToast('✅ 저장 완료');
+      } catch {
+        showToast('❌ 저장 공간 부족');
+      }
+    }
+
+    function updateSaveStatus() {
+      $('saveStatus').textContent = state.dirty ? '저장 안 됨' : '저장 완료';
+      $('saveStatus').className = state.dirty
+        ? 'mt-2 rounded-full bg-orange-50 px-3 py-1 text-[10px] font-bold text-orange-500'
+        : 'mt-2 rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-bold text-emerald-600';
+    }
+
+    function calculateCycle() {
+      const now = new Date();
+      const date = now.getDate();
+      const start = new Date(now.getFullYear(), now.getMonth() - (date < 10 ? 1 : 0), 10);
+      const end = new Date(start.getFullYear(), start.getMonth() + 1, 9, 23, 59, 59);
+      const progress = Math.min(Math.max(((now - start) / (end - start)) * 100, 0), 100);
+      state.progress = progress;
+
+      $('cycleDisplay').textContent = `주기: ${start.toLocaleDateString()} ~ ${end.toLocaleDateString()} (${Math.round(progress)}% 경과)`;
+      $('monthProgressText').textContent = `${Math.round(progress)}%`;
+      $('monthProgressBar').style.width = `${progress}%`;
+    }
+
+    function getMetrics(item, calcRatio) {
+      const net = Math.max(0, toNumber(item.r1) + toNumber(item.r2) + toNumber(item.r3) - toNumber(item.adj));
+      const calcSat = net * calcRatio;
+      const quota = toNumber(item.quota);
+      const rem = quota - calcSat;
+      const usageRate = quota > 0 ? (calcSat / quota) * 100 : 0;
+      return { net, calcSat, quota, rem, usageRate };
+    }
+
+    function updateValue(index, field, value) {
+      if (!state.isEditable) {
+        showToast('🔒 조회 모드에서는 수정할 수 없습니다');
+        return;
+      }
+      if (field === 'pos') {
+        state.data[index][field] = String(value).trim() || 'NO NAME';
+      } else {
+        state.data[index][field] = toNumber(value);
+      }
+      state.dirty = true;
+      render();
+    }
+
+    function updateSatTotal(value) {
+      if (!state.isEditable) {
+        showToast('🔒 조회 모드에서는 수정할 수 없습니다');
+        return;
+      }
+      state.satTotal = toNumber(value);
+      state.dirty = true;
+      render();
+    }
+
+    function addRow() {
+      if (!state.isEditable) return;
+      state.data.push({ id: Date.now(), pos: 'NEW POSITION', adj: 0, r1: 0, r2: 0, r3: 0, quota: 80 });
+      state.dirty = true;
+      render();
+    }
+
+    function deleteRow(index) {
+      if (!state.isEditable) return;
+      state.data.splice(index, 1);
+      state.dirty = true;
+      render();
+    }
+
+    function moveRow(index, direction) {
+      if (!state.isEditable) return;
+      const target = index + direction;
+      if (target < 0 || target >= state.data.length) return;
+      [state.data[index], state.data[target]] = [state.data[target], state.data[index]];
+      state.dirty = true;
+      render();
+    }
+
+    function render() {
+      const totalNetRouter = state.data.reduce((sum, item) => {
+        return sum + Math.max(0, toNumber(item.r1) + toNumber(item.r2) + toNumber(item.r3) - toNumber(item.adj));
+      }, 0);
+
+      const calcRatio = totalNetRouter > 0 ? state.satTotal / totalNetRouter : 0;
+      const displayPercent = state.satTotal > 0 ? (totalNetRouter / state.satTotal) * 100 : 0;
+
+      $('satTotalInput').value = state.satTotal || '';
+      $('satTotalInput').readOnly = !state.isEditable;
+      $('satTotalCapture').textContent = state.satTotal || '0';
+      $('totalNetRouter').innerHTML = `${totalNetRouter.toFixed(2)} <span class="text-lg font-normal text-slate-400">GB</span>`;
+      $('routerSatRatio').textContent = `기준 비율: ${displayPercent.toFixed(2)}%`;
+
+      document.querySelectorAll('.edit-col').forEach((el) => {
+        el.style.display = state.isEditable ? '' : 'none';
+      });
+      $('addBtn').style.display = state.isEditable ? '' : 'none';
+      $('saveBtn').style.display = state.isEditable ? '' : 'none';
+      $('importLabel').style.display = state.isEditable ? '' : 'none';
+      $('mobileAddBtn').style.display = state.isEditable ? '' : 'none';
+      $('mobileSaveBtn').style.display = state.isEditable ? '' : 'none';
+
+      const rows = [];
+      const cards = [];
+      const sums = { adj: 0, r1: 0, r2: 0, r3: 0, net: 0, sat: 0, quota: 0, rem: 0 };
+
+      state.data.forEach((item, index) => {
+        const metrics = getMetrics(item, calcRatio);
+        const isBlocked = metrics.usageRate >= 100;
+        const isWarning = !isBlocked && metrics.usageRate > state.progress;
+        const rowBg = isBlocked ? 'bg-red-50/80' : 'hover:bg-slate-50/50';
+        const remClass = isBlocked ? 'text-red-600 underline' : isWarning ? 'text-orange-500' : 'text-emerald-600';
+        const inputClass = state.isEditable ? 'border-b border-transparent focus:border-blue-400' : 'read-only-input';
+        const readonly = state.isEditable ? '' : 'readonly';
+
+        sums.adj += toNumber(item.adj);
+        sums.r1 += toNumber(item.r1);
+        sums.r2 += toNumber(item.r2);
+        sums.r3 += toNumber(item.r3);
+        sums.net += metrics.net;
+        sums.sat += metrics.calcSat;
+        sums.quota += metrics.quota;
+        sums.rem += metrics.rem;
+
+        rows.push(`
+          <tr class="transition-colors ${rowBg}">
+            <td class="px-6 py-4">
+              <input value="${escapeHtml(item.pos)}" ${readonly} data-update="${index}:pos" class="w-full bg-transparent pb-0.5 text-sm font-black outline-none ${inputClass} ${isBlocked ? 'text-red-700' : 'text-slate-700'}" />
+              <span class="capture-text text-[12px] font-black ${isBlocked ? 'text-red-700' : 'text-slate-800'}">${escapeHtml(item.pos)}</span>
+            </td>
+            <td class="px-2 py-4 text-center font-black ${isBlocked ? 'rounded-lg bg-red-600 text-white shadow-sm' : 'text-blue-500'}">${metrics.usageRate.toFixed(1)}%</td>
+            ${state.isEditable ? numberCell(index, 'adj', item.adj, 'text-red-500') : ''}
+            ${state.isEditable ? numberCell(index, 'r1', item.r1) : ''}
+            ${state.isEditable ? numberCell(index, 'r2', item.r2) : ''}
+            ${state.isEditable ? numberCell(index, 'r3', item.r3) : ''}
+            <td class="px-6 py-4 text-center font-black text-slate-900">${metrics.net.toFixed(2)}</td>
+            <td class="bg-blue-50/30 px-6 py-4 text-center font-black text-blue-700">${metrics.calcSat.toFixed(2)}</td>
+            <td class="px-6 py-4 text-center">
+              <input type="number" min="0" step="0.1" value="${metrics.quota}" ${readonly} data-update="${index}:quota" class="w-16 bg-transparent text-center font-bold outline-none ${inputClass}" />
+              <span class="capture-text font-bold">${metrics.quota}</span>
+            </td>
+            <td class="px-6 py-4 text-center font-black ${remClass}">
+              ${isBlocked ? '<span class="mr-1 rounded bg-red-600 px-1 text-[10px] uppercase text-white">Block</span>' : ''}
+              ${metrics.rem.toFixed(2)}
+            </td>
+            ${state.isEditable ? `
+              <td class="no-print flex justify-center gap-1 px-6 py-4 text-center">
+                <button data-move="${index}:-1" class="move-btn ${index === 0 ? 'pointer-events-none opacity-0' : ''}">▲</button>
+                <button data-move="${index}:1" class="move-btn ${index === state.data.length - 1 ? 'pointer-events-none opacity-0' : ''}">▼</button>
+                <button data-delete="${index}" class="ml-1 p-1 text-slate-300 transition hover:text-red-500">✖</button>
+              </td>` : ''}
+          </tr>
+        `);
+
+        cards.push(`
+          <article class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm ${isBlocked ? 'border-red-200 bg-red-50/70' : ''}">
+            <div class="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <p class="text-xs font-black uppercase text-slate-400">Position</p>
+                <input value="${escapeHtml(item.pos)}" ${readonly} data-update="${index}:pos" class="mt-1 w-full bg-transparent text-2xl font-black outline-none ${isBlocked ? 'text-red-700' : 'text-slate-900'}" autocomplete="off" autocapitalize="characters" />
+              </div>
+              <div class="text-right">
+                <p class="text-xs font-black uppercase text-slate-400">사용률</p>
+                <p class="mt-1 text-2xl font-black ${isBlocked ? 'text-red-600' : 'text-blue-600'}">${metrics.usageRate.toFixed(1)}%</p>
+              </div>
+            </div>
+            <div class="grid grid-cols-3 gap-2 text-center text-sm">
+              <div class="rounded-2xl bg-slate-50 p-3"><p class="text-[10px] font-black text-slate-400">순수</p><p class="font-black">${metrics.net.toFixed(2)}</p></div>
+              <div class="rounded-2xl bg-blue-50 p-3"><p class="text-[10px] font-black text-blue-400">위성</p><p class="font-black text-blue-700">${metrics.calcSat.toFixed(2)}</p></div>
+              <div class="rounded-2xl bg-slate-50 p-3"><p class="text-[10px] font-black text-slate-400">잔량</p><p class="font-black ${remClass}">${metrics.rem.toFixed(2)}</p></div>
+            </div>
+            ${state.isEditable ? `
+              <div class="mt-4 grid grid-cols-5 gap-2 text-center text-xs">
+                ${mobileInput(index, 'adj', item.adj, '보정')}
+                ${mobileInput(index, 'r1', item.r1, 'R1')}
+                ${mobileInput(index, 'r2', item.r2, 'R2')}
+                ${mobileInput(index, 'r3', item.r3, 'R3')}
+                ${mobileInput(index, 'quota', item.quota, '할당')}
+              </div>
+              <div class="mt-4 flex justify-end gap-1">
+                <button data-move="${index}:-1" class="move-btn">▲</button>
+                <button data-move="${index}:1" class="move-btn">▼</button>
+                <button data-delete="${index}" class="rounded-lg px-2 py-1 font-black text-red-400">삭제</button>
+              </div>` : ''}
+          </article>
+        `);
+      });
+
+      const totalRate = sums.quota > 0 ? (sums.sat / sums.quota) * 100 : 0;
+      rows.push(`
+        <tr class="border-t-2 border-slate-200 bg-slate-100 font-black text-slate-900">
+          <td class="px-6 py-5 text-[10px] uppercase tracking-tighter">Summary Total</td>
+          <td class="px-2 py-5 text-center text-blue-600">${totalRate.toFixed(1)}%</td>
+          ${state.isEditable ? `<td class="px-2 py-5 text-center text-red-500">${sums.adj.toFixed(1)}</td>` : ''}
+          ${state.isEditable ? `<td class="px-2 py-5 text-center">${sums.r1.toFixed(1)}</td>` : ''}
+          ${state.isEditable ? `<td class="px-2 py-5 text-center">${sums.r2.toFixed(1)}</td>` : ''}
+          ${state.isEditable ? `<td class="px-2 py-5 text-center">${sums.r3.toFixed(1)}</td>` : ''}
+          <td class="px-6 py-5 text-center">${sums.net.toFixed(2)}</td>
+          <td class="px-6 py-5 text-center text-blue-800">${sums.sat.toFixed(2)}</td>
+          <td class="px-6 py-5 text-center">${sums.quota.toFixed(0)}</td>
+          <td class="px-6 py-5 text-center text-emerald-800">${sums.rem.toFixed(2)}</td>
+          ${state.isEditable ? '<td class="no-print px-6 py-5"></td>' : ''}
+        </tr>
+      `);
+
+      $('tableBody').innerHTML = rows.join('');
+      $('mobileList').innerHTML = cards.join('');
+      bindDynamicEvents();
+      updateSaveStatus();
+    }
+
+    function numberCell(index, field, value, extraClass = '') {
+      return `
+        <td class="px-2 py-4 text-center">
+          <input type="number" min="0" step="0.1" value="${toNumber(value)}" data-update="${index}:${field}" class="w-16 bg-transparent text-center font-bold outline-none border-b border-transparent focus:border-blue-500 ${extraClass}" />
+          <span class="capture-text font-bold ${extraClass}">${toNumber(value)}</span>
+        </td>
+      `;
+    }
+
+    function mobileInput(index, field, value, label) {
+      return `
+        <label class="rounded-2xl bg-slate-50 p-2">
+          <span class="block text-[10px] font-black text-slate-400">${label}</span>
+          <input type="number" inputmode="decimal" min="0" step="0.1" value="${toNumber(value)}" data-update="${index}:${field}" class="mt-1 w-full bg-transparent text-center font-black outline-none" />
+        </label>
+      `;
+    }
+
+    function bindDynamicEvents() {
+      document.querySelectorAll('[data-update]').forEach((input) => {
+        input.addEventListener('change', (event) => {
+          const [index, field] = event.target.dataset.update.split(':');
+          updateValue(Number(index), field, event.target.value);
+        });
+      });
+
+      document.querySelectorAll('[data-delete]').forEach((button) => {
+        button.addEventListener('click', () => deleteRow(Number(button.dataset.delete)));
+      });
+
+      document.querySelectorAll('[data-move]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const [index, direction] = button.dataset.move.split(':').map(Number);
+          moveRow(index, direction);
+        });
+      });
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    async function saveAsImage() {
+      const button = $('captureBtn');
+      const original = button.textContent;
+      button.textContent = 'Processing...';
+      document.body.classList.add('capture-mode');
+
+      const area = $('captureArea');
+      const table = $('mainTable');
+      const originalStyle = area.getAttribute('style');
+      const captureWidth = Math.max(table.scrollWidth + 60, area.scrollWidth);
+      area.style.width = captureWidth + 'px';
+
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      try {
+        const canvas = await html2canvas(area, {
+          backgroundColor: '#f8fafc',
+          scale: 2,
+          useCORS: true,
+          width: captureWidth,
+          logging: false
+        });
+
+        canvas.toBlob((blob) => {
+          if (!blob) return showToast('❌ 이미지 생성 실패');
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `Starlink_Usage_${new Date().toISOString().slice(0, 10)}.png`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 500);
+          showToast('📸 이미지 저장 완료');
+        }, 'image/png');
+      } catch {
+        showToast('❌ 저장 실패');
+      } finally {
+        if (originalStyle) area.setAttribute('style', originalStyle);
+        else area.removeAttribute('style');
+        document.body.classList.remove('capture-mode');
+        button.textContent = original;
+      }
+    }
+
+    function exportBackup() {
+      const blob = new Blob([JSON.stringify({ data: state.data, satTotal: state.satTotal }, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `starlink_backup_${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('📥 백업 다운로드 완료');
+    }
+
+    function importBackup(event) {
+      if (!state.isEditable) return;
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const imported = JSON.parse(ev.target.result);
+          if (!Array.isArray(imported.data)) throw new Error('invalid data');
+          state.data = imported.data;
+          state.satTotal = toNumber(imported.satTotal);
+          state.dirty = true;
+          render();
+          showToast('📤 데이터 불러오기 성공');
+        } catch {
+          showToast('❌ 잘못된 파일 형식');
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    }
+
+    function login() {
+      const pw = $('passwordInput').value;
+      if (pw !== '1357' && pw !== '1919') {
+        $('loginError').classList.remove('hidden');
+        setTimeout(() => $('loginError').classList.add('hidden'), 2000);
+        return;
+      }
+
+      state.isEditable = pw === '1919';
+      $('loginSection').style.display = 'none';
+      $('mainContent').classList.remove('hidden');
+      setTimeout(() => $('mainContent').style.opacity = '1', 30);
+      $('modeStatus').textContent = state.isEditable ? '편집 모드' : '조회 모드';
+      $('modeStatus').className = state.isEditable ? 'text-xl font-black uppercase text-green-600' : 'text-xl font-black uppercase text-blue-600';
+      calculateCycle();
+      render();
+    }
+
+    $('loginBtn').addEventListener('click', login);
+    $('passwordInput').addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') login();
+    });
+    $('satTotalInput').addEventListener('input', (event) => updateSatTotal(event.target.value));
+    $('addBtn').addEventListener('click', addRow);
+    $('saveBtn').addEventListener('click', saveCloud);
+    $('logoutBtn').addEventListener('click', () => location.reload());
+    $('captureBtn').addEventListener('click', saveAsImage);
+    $('backupBtn').addEventListener('click', exportBackup);
+    $('importFile').addEventListener('change', importBackup);
+    $('mobileCaptureBtn').addEventListener('click', saveAsImage);
+    $('mobileSaveBtn').addEventListener('click', saveCloud);
+    $('mobileAddBtn').addEventListener('click', addRow);
+
+    window.addEventListener('beforeunload', (event) => {
+      if (!state.dirty) return;
+      event.preventDefault();
+      event.returnValue = '';
+    });
+
+    try {
+      loadLocal();
+      calculateCycle();
+      render();
+      initFirebase();
+      loadCloud();
+      subscribeCloud();
+      setTimeout(() => $('passwordInput')?.focus(), 300);
+    } catch (error) {
+      console.error(error);
+      document.body.innerHTML = `
+        <div style="min-height:100vh; display:flex; align-items:center; justify-content:center; background:#f8fafc; padding:20px; font-family:sans-serif;">
+          <div style="max-width:420px; background:white; border:1px solid #e2e8f0; border-radius:24px; padding:24px; box-shadow:0 10px 30px rgba(15,23,42,.08);">
+            <h1 style="font-size:22px; font-weight:900; margin-bottom:10px;">페이지 실행 오류</h1>
+            <p style="font-size:14px; color:#475569; line-height:1.6;">HTML 파일이 일부 잘렸거나 브라우저에서 스크립트 실행이 차단되었을 수 있습니다. Safari/Chrome에서 다시 열어보세요.</p>
+            <pre style="white-space:pre-wrap; margin-top:16px; font-size:12px; color:#ef4444; background:#fef2f2; padding:12px; border-radius:12px;">${String(error.message || error)}</pre>
+          </div>
+        </div>
+      `;
+    }
+  </script>
+</body>
+</html>
